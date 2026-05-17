@@ -34,7 +34,7 @@ void printStudent(struct sinfo *s) {
     printf("  CGPA     : %.2f\n", s->cgpa);
     printf("  Courses  : %d %d %d %d %d\n",
            s->cid[0], s->cid[1], s->cid[2], s->cid[3], s->cid[4]);
-    printf("  ──────────────────────────────────────────────\n");
+    printf("  \n");
 }
 
 int findByRoll(int roll) {
@@ -43,7 +43,7 @@ int findByRoll(int roll) {
     return -1;
 }
 
-/* ─── 1. Add Student Manually ─────────────────────────────── */
+/*1. Add Student Manually */
 
 void addStudent() {
     if (count >= MAX_STUDENTS) {
@@ -68,10 +68,10 @@ void addStudent() {
     for (int i = 0; i < 5; i++) scanf("%d", &s.cid[i]);
 
     students[count++] = s;
-    printf("[✓] Student '%s %s' added successfully.\n", s.fname, s.lname);
+    printf("[*] Student '%s %s' added successfully.\n", s.fname, s.lname);
 }
 
-/* ─── 2. Bulk Import from TXT ─────────────────────────────── */
+/* 2. Bulk Import from TXT */
 
 void bulkImport() {
     char filename[100];
@@ -108,10 +108,10 @@ void bulkImport() {
     }
 
     fclose(fp);
-    printf("[✓] Import complete — %d added, %d skipped (duplicates).\n", imported, skipped);
+    printf("Import complete - %d added, %d skipped (duplicates).\n", imported, skipped);
 }
 
-/* ─── 3. Download / Export to TXT ────────────────────────── */
+/* 3. Download / Export to TXT */
 
 void downloadAll() {
     if (count == 0) {
@@ -133,10 +133,10 @@ void downloadAll() {
     }
 
     fclose(fp);
-    printf("[✓] %d record(s) exported to 'database_backup.txt'.\n", count);
+    printf("%d record(s) exported to 'database_backup.txt'.\n", count);
 }
 
-/* ─── 4. Find by Roll Number ──────────────────────────────── */
+/* 4. Find by Roll Number */
 
 void findByRollNo() {
     int roll;
@@ -145,14 +145,14 @@ void findByRollNo() {
 
     int idx = findByRoll(roll);
     if (idx == -1) {
-        printf("[!] No student found with Roll No %d.\n", roll);
+        printf(" No student found with Roll No %d.\n", roll);
     } else {
-        printf("\n[✓] Student Found:\n");
+        printf("\n Student Found:\n");
         printStudent(&students[idx]);
     }
 }
 
-/* ─── 5. Find by First Name ───────────────────────────────── */
+/* 5. Find by First Name */
 
 void findByFirstName() {
     char name[50];
@@ -162,7 +162,7 @@ void findByFirstName() {
     int found = 0;
     for (int i = 0; i < count; i++) {
         if (strcasecmp(students[i].fname, name) == 0) {
-            if (!found) printf("\n[✓] Match(es) Found:\n");
+            if (!found) printf("\n Match(es) Found:\n");
             printStudent(&students[i]);
             found++;
         }
@@ -171,7 +171,7 @@ void findByFirstName() {
         printf("[!] No student found with first name '%s'.\n", name);
 }
 
-/* ─── 6. Delete by Roll Number ────────────────────────────── */
+/* 6. Delete by Roll Number */
 
 void deleteByRoll() {
     int roll;
@@ -180,7 +180,7 @@ void deleteByRoll() {
 
     int idx = findByRoll(roll);
     if (idx == -1) {
-        printf("[!] No student found with Roll No %d.\n", roll);
+        printf(" No student found with Roll No %d.\n", roll);
         return;
     }
 
@@ -189,7 +189,7 @@ void deleteByRoll() {
     printf("  Confirm? (y/n): ");
     char c; scanf(" %c", &c);
     if (c != 'y' && c != 'Y') {
-        printf("[~] Deletion cancelled.\n");
+        printf(" Deletion cancelled.\n");
         return;
     }
 
@@ -197,10 +197,10 @@ void deleteByRoll() {
     for (int i = idx; i < count - 1; i++)
         students[i] = students[i + 1];
     count--;
-    printf("[✓] Student with Roll No %d deleted.\n", roll);
+    printf("[*] Student with Roll No %d deleted.\n", roll);
 }
 
-/* ─── 7. Update by Roll Number ────────────────────────────── */
+/* 7. Update by Roll Number */
 
 void updateByRoll() {
     int roll;
@@ -253,30 +253,30 @@ void updateByRoll() {
             return;
     }
 
-    printf("[✓] Record updated successfully.\n");
+    printf("[*] Record updated successfully.\n");
     printStudent(s);
 }
 
-/* ─── Menu ────────────────────────────────────────────────── */
+/*  Menu  */
 
 void showMenu() {
-    printf("\n  ┌─────────────────────────────────────┐\n");
-    printf("  │           MAIN MENU                 │\n");
-    printf("  ├─────────────────────────────────────┤\n");
-    printf("  │  1. Add Student (Manual)            │\n");
-    printf("  │  2. Bulk Import from .txt           │\n");
-    printf("  │  3. Download All to .txt            │\n");
-    printf("  │  4. Find by Roll Number             │\n");
-    printf("  │  5. Find by First Name              │\n");
-    printf("  │  6. Delete by Roll Number           │\n");
-    printf("  │  7. Update by Roll Number           │\n");
-    printf("  │  8. Exit                            │\n");
-    printf("  └─────────────────────────────────────┘\n");
+    printf("\n  \n");
+    printf("           MAIN MENU              \n");
+    printf("  \n");
+    printf("  1. Add Student (Manual)            \n");
+    printf("  2. Bulk Import from .txt           \n");
+    printf("  3. Download All to .txt            \n");
+    printf("  4. Find by Roll Number             \n");
+    printf("  5. Find by First Name              \n");
+    printf("  6. Delete by Roll Number           \n");
+    printf("  7. Update by Roll Number           \n");
+    printf("  8. Exit                            \n");
+    printf("  \n");
     printf("  Records in memory: %d\n", count);
     printf("  Choice: ");
 }
 
-/* ─── Main ────────────────────────────────────────────────── */
+/* Main */
 
 int main() {
     int choice;
@@ -299,8 +299,8 @@ int main() {
             case 5: findByFirstName(); break;
             case 6: deleteByRoll();    break;
             case 7: updateByRoll();    break;
-            case 8: printf("\n[✓] Exiting. Goodbye!\n\n"); break;
-            default: printf("[!] Invalid option. Choose 1–8.\n");
+            case 8: printf("\n[*] Exiting. Goodbye!\n\n"); break;
+            default: printf("[!] Invalid option. Choose 1-8.\n");
         }
 
     } while (choice != 8);
