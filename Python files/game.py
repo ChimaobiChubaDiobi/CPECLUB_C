@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import sqlite3
+import math
 
 # Database setup
 DB_PATH = "virtual_matches.db"
@@ -63,6 +64,67 @@ def save_match(data):
     conn.commit()
     conn.close()
 
+# Prediction Engine
+def calculate_xg(df, home_team, away_team):
+    overall_avg_scored = (df['home_goals'].mean() + df['away_goals'].mean()) / 2 if not df.empty else 1.5
+    
+    teamA_home = df[df['home_team'] == home_team]
+    teamB_away = df[df['away_team'] == away_team]
+    
+    home_scored = teamA_home['home_goals'].mean() if not teamA_home.empty else overall_avg_scored
+    home_conceded = teamA_home['away_goals'].mean() if not teamA_home.empty else overall_avg_scored
+    
+    away_scored = teamB_away['away_goals'].mean() if not teamB_away.empty else overall_avg_scored
+    away_conceded = teamB_away['home_goals'].mean() if not teamB_away.empty else overall_avg_scored
+    
+    home_xg = (home_scored + away_conceded) / 2
+    away_xg = (away_scored + home_conceded) / 2
+    
+    if pd.isna(home_xg): home_xg = 1.5
+    if pd.isna(away_xg): away_xg = 1.5
+        
+    return home_xg, away_xg
+
+def poisson_probability(k, lmbda):
+    return (lmbda**k * math.exp(-lmbda)) / math.factorial(k)
+
+def predict_match(home_xg, away_xg):
+    max_goals = 5
+    probs = {'Home': 0, 'Draw': 0, 'Away': 0, 'Over 1.5': 0, 'Under 1.5': 0, 'Over 2.5': 0, 'Under 2.5': 0}
+    
+    for h in range(max_goals + 1):
+        for a in range(max_goals + 1):
+            prob = poisson_probability(h, home_xg) * poisson_probability(a, away_xg)
+            
+            if h > a: probs['Home'] += prob
+            elif h == a: probs['Draw'] += prob
+            else: probs['Away'] += prob
+                
+            total_goals = h + a
+            if total_goals > 1.5: probs['Over 1.5'] += prob
+            else: probs['Under 1.5'] += prob
+                
+            if total_goals > 2.5: probs['Over 2.5'] += prob
+            else: probs['Under 2.5'] += prob
+                
+    total_1x2 = probs['Home'] + probs['Draw'] + probs['Away']
+    if total_1x2 > 0:
+        probs['Home'] /= total_1x2
+        probs['Draw'] /= total_1x2
+        probs['Away'] /= total_1x2
+        
+    total_15 = probs['Over 1.5'] + probs['Under 1.5']
+    if total_15 > 0:
+        probs['Over 1.5'] /= total_15
+        probs['Under 1.5'] /= total_15
+        
+    total_25 = probs['Over 2.5'] + probs['Under 2.5']
+    if total_25 > 0:
+        probs['Over 2.5'] /= total_25
+        probs['Under 2.5'] /= total_25
+        
+    return probs
+
 # ====================== STREAMLIT APP ======================
 st.set_page_config(page_title="SportyBet Virtuals Analyzer", layout="wide")
 st.title("🏆 SportyBet Virtuals Analyzer")
@@ -106,7 +168,7 @@ with st.sidebar:
             st.error("Please enter both team names")
 
 # Main Tabs
-tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📋 Match History", "🎯 Strategies"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "🔮 Predictor", "📋 Match History", "🎯 Strategies"])
 
 with tab1:
     st.header("Overall Statistics")
@@ -133,6 +195,61 @@ with tab1:
         st.info("No matches logged yet. Use the sidebar to start tracking!")
 
 with tab2:
+    st.header("🔮 Match Predictor")
+    st.markdown("Select two teams to predict the statistical outcome based on historical data.")
+    
+    all_teams = []
+    if not df.empty:
+        all_teams = sorted(list(set(df['home_team'].tolist() + df['away_team'].tolist())))
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        pred_home = st.selectbox("Home Team", options=all_teams, key="phome_sel") if all_teams else st.text_input("Home Team", key="phome")
+    with col2:
+        pred_away = st.selectbox("Away Team", options=all_teams, index=min(1, len(all_teams)-1), key="paway_sel") if all_teams else st.text_input("Away Team", key="paway")
+        
+    if st.button("Calculate Predictions", type="primary", use_container_width=True):
+        if pred_home and pred_away:
+            if pred_home == pred_away:
+                st.warning("Please select two different teams.")
+            else:
+                home_xg, away_xg = calculate_xg(df, pred_home, pred_away)
+                probs = predict_match(home_xg, away_xg)
+                
+                st.subheader("Statistical Prediction Models")
+                
+                st.markdown("#### Match Winner (1X2)")
+                col_w1, col_w2, col_w3 = st.columns(3)
+                col_w1.metric("Home Win", f"{probs['Home']*100:.1f}%")
+                col_w2.metric("Draw", f"{probs['Draw']*100:.1f}%")
+                col_w3.metric("Away Win", f"{probs['Away']*100:.1f}%")
+                
+                st.markdown("#### Goals Market")
+                col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+                col_g1.metric("Over 1.5", f"{probs['Over 1.5']*100:.1f}%")
+                col_g2.metric("Under 1.5", f"{probs['Under 1.5']*100:.1f}%")
+                col_g3.metric("Over 2.5", f"{probs['Over 2.5']*100:.1f}%")
+                col_g4.metric("Under 2.5", f"{probs['Under 2.5']*100:.1f}%")
+                
+                st.markdown("---")
+                st.subheader("🎯 Recommended Bet")
+                best_bet = "Skip (No clear edge)"
+                highest_prob = 0
+                
+                for market, prob in probs.items():
+                    if 'Under' not in market:
+                        if prob > highest_prob and prob > 0.55:
+                            highest_prob = prob
+                            best_bet = market
+                            
+                if highest_prob > 0:
+                    st.success(f"**{best_bet}** with {highest_prob*100:.1f}% statistical probability")
+                else:
+                    st.info("No strong statistical edge found for this match.")
+        else:
+            st.error("Please provide both teams.")
+
+with tab3:
     st.header("Match History")
     if not df.empty:
         display_df = df.copy()
@@ -144,7 +261,7 @@ with tab2:
     else:
         st.info("No matches recorded yet.")
 
-with tab3:
+with tab4:
     st.header("🎯 Strategy Recommendations")
     if not df.empty and len(df) >= 5:
         st.subheader("Draw After Non-Draw Streak")
