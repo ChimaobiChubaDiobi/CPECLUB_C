@@ -91,10 +91,12 @@ def poisson_probability(k, lmbda):
 def predict_match(home_xg, away_xg):
     max_goals = 5
     probs = {'Home': 0, 'Draw': 0, 'Away': 0, 'Over 1.5': 0, 'Under 1.5': 0, 'Over 2.5': 0, 'Under 2.5': 0}
+    cs_probs = {}
     
     for h in range(max_goals + 1):
         for a in range(max_goals + 1):
             prob = poisson_probability(h, home_xg) * poisson_probability(a, away_xg)
+            cs_probs[f"{h}-{a}"] = prob
             
             if h > a: probs['Home'] += prob
             elif h == a: probs['Draw'] += prob
@@ -123,7 +125,15 @@ def predict_match(home_xg, away_xg):
         probs['Over 2.5'] /= total_25
         probs['Under 2.5'] /= total_25
         
-    return probs
+    total_cs = sum(cs_probs.values())
+    if total_cs > 0:
+        for k in cs_probs:
+            cs_probs[k] /= total_cs
+            
+    # Get top 5 correct scores
+    top_cs = dict(sorted(cs_probs.items(), key=lambda item: item[1], reverse=True)[:5])
+        
+    return probs, top_cs
 
 # ====================== STREAMLIT APP ======================
 st.set_page_config(page_title="SportyBet Virtuals Analyzer", layout="wide")
@@ -208,15 +218,26 @@ with tab2:
     with col2:
         pred_away = st.selectbox("Away Team", options=all_teams, index=min(1, len(all_teams)-1), key="paway_sel") if all_teams else st.text_input("Away Team", key="paway")
         
+    st.markdown("---")
+    st.subheader("💰 Bookmaker Odds (Optional for Value Bets)")
+    col_o1, col_o2, col_o3 = st.columns(3)
+    odds_home = col_o1.number_input("Home Win Odds", min_value=1.0, value=1.0, step=0.1)
+    odds_draw = col_o2.number_input("Draw Odds", min_value=1.0, value=1.0, step=0.1)
+    odds_away = col_o3.number_input("Away Win Odds", min_value=1.0, value=1.0, step=0.1)
+
+    col_o4, col_o5 = st.columns(2)
+    odds_over15 = col_o4.number_input("Over 1.5 Odds", min_value=1.0, value=1.0, step=0.1)
+    odds_over25 = col_o5.number_input("Over 2.5 Odds", min_value=1.0, value=1.0, step=0.1)
+
     if st.button("Calculate Predictions", type="primary", use_container_width=True):
         if pred_home and pred_away:
             if pred_home == pred_away:
                 st.warning("Please select two different teams.")
             else:
                 home_xg, away_xg = calculate_xg(df, pred_home, pred_away)
-                probs = predict_match(home_xg, away_xg)
+                probs, top_cs = predict_match(home_xg, away_xg)
                 
-                st.subheader("Statistical Prediction Models")
+                st.subheader("📈 Statistical Prediction Models")
                 
                 st.markdown("#### Match Winner (1X2)")
                 col_w1, col_w2, col_w3 = st.columns(3)
@@ -231,21 +252,52 @@ with tab2:
                 col_g3.metric("Over 2.5", f"{probs['Over 2.5']*100:.1f}%")
                 col_g4.metric("Under 2.5", f"{probs['Under 2.5']*100:.1f}%")
                 
-                st.markdown("---")
-                st.subheader("🎯 Recommended Bet")
-                best_bet = "Skip (No clear edge)"
-                highest_prob = 0
+                st.markdown("#### Top 3 Most Likely Correct Scores")
+                cs_cols = st.columns(3)
+                cs_keys = list(top_cs.keys())
+                for i in range(min(3, len(cs_keys))):
+                    cs_cols[i].metric(f"Score: {cs_keys[i]}", f"{top_cs[cs_keys[i]]*100:.1f}%")
                 
-                for market, prob in probs.items():
-                    if 'Under' not in market:
-                        if prob > highest_prob and prob > 0.55:
-                            highest_prob = prob
-                            best_bet = market
+                st.markdown("---")
+                st.subheader("🎯 Recommended Betting Options")
+                
+                options = []
+                
+                # Check for value bets if odds were provided
+                provided_odds = {
+                    'Home': odds_home, 'Draw': odds_draw, 'Away': odds_away,
+                    'Over 1.5': odds_over15, 'Over 2.5': odds_over25
+                }
+                
+                has_custom_odds = any(o > 1.0 for o in provided_odds.values())
+                
+                if has_custom_odds:
+                    st.markdown("**Value Bets found based on your Odds Input (Expected Value > 0):**")
+                    for market, odd in provided_odds.items():
+                        if odd > 1.0:
+                            ev = (probs[market] * odd) - 1
+                            if ev > 0.05: # more than 5% edge
+                                options.append(f"✅ **{market}** @ {odd} (Edge: +{ev*100:.1f}%) - *Strong Value*")
+                            elif ev > 0:
+                                options.append(f"☑️ **{market}** @ {odd} (Edge: +{ev*100:.1f}%) - *Slight Value*")
+                
+                if not options:
+                    if has_custom_odds:
+                        st.info("No value bets found based on the provided odds.")
+                    
+                    st.markdown("**Safe Options based on Statistical Probability:**")
+                    
+                    for market, prob in probs.items():
+                        if 'Under' not in market and prob > 0.55:
+                            options.append(f"📊 **{market}** (Probability: {prob*100:.1f}%)")
                             
-                if highest_prob > 0:
-                    st.success(f"**{best_bet}** with {highest_prob*100:.1f}% statistical probability")
-                else:
-                    st.info("No strong statistical edge found for this match.")
+                    # Always show top correct score as an option
+                    top_score = cs_keys[0]
+                    top_score_prob = top_cs[top_score]
+                    options.append(f"🎯 **Correct Score {top_score}** (Probability: {top_score_prob*100:.1f}%)")
+
+                for opt in options:
+                    st.success(opt)
         else:
             st.error("Please provide both teams.")
 
