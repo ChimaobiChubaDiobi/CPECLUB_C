@@ -121,3 +121,58 @@ with tab1:
         col2.metric("Draw Rate", f"{draw_rate:.1f}%")
         col3.metric("Over 1.5 Rate", f"{over15_rate:.1f}%")
         col4.metric("Over 2.5 Rate", f"{over25_rate:.1f}%")
+        st.subheader("Results Distribution")
+        fig1 = px.pie(df, names='result', title="Match Outcomes", color_discrete_sequence=px.colors.sequential.RdBu)
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        st.subheader("Goals Distribution")
+        goals_df = pd.melt(df, value_vars=['home_goals', 'away_goals'], var_name='Side', value_name='Goals')
+        fig2 = px.histogram(goals_df, x='Goals', color='Side', barmode='group', title="Home vs Away Goals")
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No matches logged yet. Use the sidebar to start tracking!")
+
+with tab2:
+    st.header("Match History")
+    if not df.empty:
+        display_df = df.copy()
+        display_df['timestamp'] = display_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M')
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        csv = display_df.to_csv(index=False)
+        st.download_button("📥 Download CSV", csv, "virtual_matches_history.csv", "text/csv")
+    else:
+        st.info("No matches recorded yet.")
+
+with tab3:
+    st.header("🎯 Strategy Recommendations")
+    if not df.empty and len(df) >= 5:
+        st.subheader("Draw After Non-Draw Streak")
+        streak = 0
+        recs = []
+        for _, row in df.iterrows():
+            if row['result'] != 'Draw':
+                streak += 1
+            else:
+                if streak >= 4:
+                    recs.append(f"Strong Draw Signal after {streak} non-draws → {row['home_team']} vs {row['away_team']}")
+                streak = 0
+        if recs:
+            for r in recs[-3:]:
+                st.success(r)
+        else:
+            st.info("No strong draw streaks detected yet.")
+        
+        st.subheader("Over 1.5 Goals Strategy")
+        low_streak = 0
+        for _, row in df.iterrows():
+            if not row['over_15']:
+                low_streak += 1
+            else:
+                if low_streak >= 3:
+                    st.info(f"Over 1.5 recommended after {low_streak} low-scoring games")
+                low_streak = 0
+    else:
+        st.info("Log at least 5 matches to see intelligent strategy suggestions.")
+
+st.caption("⚠️ Disclaimer: Virtual matches are RNG-based. This tool helps with statistical tracking and common community strategies only. No guarantee of wins. Gamble responsibly.")
